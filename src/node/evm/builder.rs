@@ -1,5 +1,5 @@
 use crate::{BscPrimitives, hardforks::BscHardforks, node::{engine_api::payload::BscPayloadTypes, evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
-use reth_engine_primitives::ConsensusEngineHandle;
+use reth_engine_primitives::{BSCEngineMessageError, ConsensusEngineHandle};
 use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
@@ -113,10 +113,30 @@ where
         // calculate the state root
         let state_root_start = std::time::Instant::now();
         let hashed_state = state.hashed_post_state(&db.bundle_state);
-
+        
         if let Some(engine) = crate::shared::get_engine_handle() {
-            let td = engine.query_td(self.parent.number, self.parent.hash_slow()).await?;
-            tracing::debug!("Succeed to query TD in builder, block_number: {}, block_hash: {}, td: {:?}", self.parent.number, self.parent.hash_slow(), td);
+            let td = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                let number = self.parent.number;
+                let hash = self.parent.hash_slow();
+                let fut = async {
+                    engine.query_td(number, hash).await
+                };
+                tokio::task::block_in_place(|| handle.block_on(fut))
+            } else {
+                let number = self.parent.number;
+                let hash = self.parent.hash_slow();
+                let fut = async {
+                    engine.query_td(number, hash).await
+                };
+                match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                    Ok(rt) => {
+                        rt.block_on(fut)
+                    }
+                    Err(err) => {
+                        Err(BSCEngineMessageError::internal(err))
+                    }
+                }
+            }.map_err(BlockExecutionError::other)?;
         }
         let (state_root, trie_updates) = state
             .state_root_with_updates(hashed_state.clone())
