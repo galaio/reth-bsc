@@ -16,6 +16,7 @@ use crate::node::engine_api::payload::BscPayloadTypes;
 use crate::node::primitives::BscBlock;
 use std::sync::RwLock;
 use schnellru::{LruMap, ByLength};
+use reth_engine_primitives::ConsensusEngineHandle;
 
 /// Function type for HeaderProvider::header() access (by hash)
 type HeaderByHashFn = Arc<dyn Fn(&B256) -> Option<Header> + Send + Sync>;
@@ -63,6 +64,19 @@ static NETWORK_HANDLE: OnceLock<NetworkHandle<BscNetworkPrimitives>> = OnceLock:
 static PAYLOAD_EVENTS_TX: OnceLock<broadcast::Sender<Events<BscPayloadTypes>>> = OnceLock::new();
 /// Broadcast channel for notifying about successfully imported block hashes
 static IMPORTED_BLOCKS_TX: OnceLock<broadcast::Sender<B256>> = OnceLock::new();
+
+/// Global engine handle for consensus engine
+static ENGINE_HANDLE: OnceLock<ConsensusEngineHandle<BscPayloadTypes>> = OnceLock::new();
+
+/// Set global consensus engine handle. Returns an error if already set.
+pub fn set_engine_handle(handle: ConsensusEngineHandle<BscPayloadTypes>) -> Result<(), ConsensusEngineHandle<BscPayloadTypes>> {
+    ENGINE_HANDLE.set(handle)
+}
+
+/// Get global consensus engine handle if initialized.
+pub fn get_engine_handle() -> Option<ConsensusEngineHandle<BscPayloadTypes>> {
+    ENGINE_HANDLE.get().cloned()
+}
 
 /// Set global imported blocks broadcast sender.
 pub fn set_imported_blocks_tx(tx: broadcast::Sender<B256>) -> Result<(), broadcast::Sender<B256>> {

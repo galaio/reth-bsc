@@ -1,4 +1,5 @@
-use crate::{BscPrimitives, hardforks::BscHardforks, node::evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}};
+use crate::{BscPrimitives, hardforks::BscHardforks, node::{engine_api::payload::BscPayloadTypes, evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
+use reth_engine_primitives::ConsensusEngineHandle;
 use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
@@ -27,6 +28,8 @@ where
     pub parent: &'a SealedHeader<HeaderTy<BscPrimitives>>,
     /// The assembler used to build the block.
     pub assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
+    /// The consensus engine handle.
+    pub engine: Option<ConsensusEngineHandle<BscPayloadTypes>>,
 }
 
 impl<'a, EVM, Spec, R> BscBlockBuilder<'a, EVM, Spec, R>
@@ -48,6 +51,7 @@ where
             shared_ctx,
             parent,
             assembler,
+            engine: None,
         }
     }
 }
@@ -109,6 +113,11 @@ where
         // calculate the state root
         let state_root_start = std::time::Instant::now();
         let hashed_state = state.hashed_post_state(&db.bundle_state);
+
+        if let Some(engine) = crate::shared::get_engine_handle() {
+            let td = self.engine.as_ref().unwrap().query_td(self.parent.number, self.parent.hash_slow()).await?;
+            tracing::debug!("Succeed to query TD in builder, block_number: {}, block_hash: {}, td: {:?}", self.parent.number, self.parent.hash_slow(), td);
+        }
         let (state_root, trie_updates) = state
             .state_root_with_updates(hashed_state.clone())
             .map_err(BlockExecutionError::other)?;

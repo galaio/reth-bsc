@@ -140,6 +140,11 @@ impl NewBlockPayload for BscNewBlock {
     fn block(&self) -> &Self::Block {
         &self.0.block
     }
+
+    fn td(&self) -> Option<alloy_primitives::U256> {
+        // Upcast stored U128 TD into U256 as required by trait
+        Some(alloy_primitives::U256::from(self.0.td.to::<u128>()))
+    }
 }
 
 /// Network primitives for BSC.
@@ -266,6 +271,9 @@ impl BscNetworkBuilder {
                 .expect("node should only be launched once")
                 .await
                 .unwrap();
+
+            // Expose engine handle globally for components that need it (e.g., miner)
+            let _ = crate::shared::set_engine_handle(handle.clone());
 
             ImportService::new(
                 provider,
