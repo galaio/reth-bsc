@@ -115,7 +115,7 @@ where
         let hashed_state = state.hashed_post_state(&db.bundle_state);
 
         if let Some(engine) = crate::shared::get_engine_handle() {
-            let td = self.engine.as_ref().unwrap().query_td(self.parent.number, self.parent.hash_slow()).await?;
+            let td = engine.query_td(self.parent.number, self.parent.hash_slow()).await?;
             tracing::debug!("Succeed to query TD in builder, block_number: {}, block_hash: {}, td: {:?}", self.parent.number, self.parent.hash_slow(), td);
         }
         let (state_root, trie_updates) = state
