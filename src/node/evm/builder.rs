@@ -1,12 +1,13 @@
 use crate::{BscPrimitives, hardforks::BscHardforks, node::{engine_api::payload::BscPayloadTypes, evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
 use alloy_primitives::BlockHash;
-use reth_engine_primitives::{BSCEngineMessageError, ConsensusEngineHandle};
+use reth_engine_primitives::{BSCEngineMessageError, ConsensusEngineHandle, BeaconEngineMessage};
 use reth_engine_tree::tree::CustomRequestMessage;
 use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
 use reth_provider::StateProvider;
 use reth_trie_parallel::root::ParallelStateRoot;
+use reth_trie_common::HashedPostState;
 use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
@@ -119,17 +120,14 @@ where
         let hashed_state = state.hashed_post_state(&db.bundle_state);
         let parent_hash = self.parent.hash_slow();
         
-        if let Some(engine) = crate::shared::get_engine_handle() {
-            let parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                let number = self.parent.number;
-                let hash = self.parent.hash_slow();
+        let (state_root, trie_updates) = if let Some(engine) = crate::shared::get_engine_handle() {
+            // 使用并行状态根任务
+            let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                 let fut = async {
                     request_parallel_state_root(&engine, parent_hash).await
                 };
                 tokio::task::block_in_place(|| handle.block_on(fut))
             } else {
-                let number = self.parent.number;
-                let hash = self.parent.hash_slow();
                 let fut = async {
                     request_parallel_state_root(&engine, parent_hash).await
                 };
@@ -143,11 +141,14 @@ where
                 }
             }.map_err(BlockExecutionError::other)?;
             parallel_state_root_task.append_state(&hashed_state);
-            let (state_root, trie_updates) = parallel_state_root_task.incremental_root_with_updates()?;
-        }
-        let (state_root, trie_updates) = state
-            .state_root_with_updates(hashed_state.clone())
-            .map_err(BlockExecutionError::other)?;
+            parallel_state_root_task
+                .incremental_root_with_updates()
+                .map_err(BlockExecutionError::other)?
+        } else {
+            state
+                .state_root_with_updates(hashed_state.clone())
+                .map_err(BlockExecutionError::other)?
+        };
         let state_root_duration = state_root_start.elapsed();
 
         let user_tx_len = self.transactions.len();
@@ -219,8 +220,10 @@ where
 pub async fn request_parallel_state_root(
     engine: &ConsensusEngineHandle<BscPayloadTypes>,
     parent_hash: BlockHash,
-) -> Result<ParallelStateRoot, BSCEngineMessageError> {
+) -> Result<ParallelStateRoot<HashedPostState>, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
-    let _ = engine.to_engine.send(CustomRequestMessage::RequestParallelStateRoot { parent_hash, tx });
+    let _ = engine.to_engine.send(
+        BeaconEngineMessage::Custom(CustomRequestMessage::RequestParallelStateRoot { parent_hash, tx })
+    );
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }
