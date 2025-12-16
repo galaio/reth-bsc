@@ -1,12 +1,13 @@
-use crate::{BscPrimitives, hardforks::BscHardforks, node::{engine_api::payload::BscPayloadTypes, evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
+use crate::{BscPrimitives, hardforks::BscHardforks, node::{evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
 use alloy_primitives::BlockHash;
-use reth_engine_primitives::{BSCEngineMessageError, ConsensusEngineHandle};
+use reth_engine_primitives::{BSCEngineMessageError};
+use reth_engine_tree::engine::EngineApiRequest;
 use reth_engine_tree::tree::CustomRequestMessage;
 use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_node_builder::rpc::EngineApiTx;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
-use reth_provider::{BlockReader, DatabaseProviderFactory, StateProvider};
+use reth_provider::StateProvider;
 use reth_trie_parallel::root::ParallelStateRoot;
 use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
@@ -34,8 +35,6 @@ where
     pub parent: &'a SealedHeader<HeaderTy<BscPrimitives>>,
     /// The assembler used to build the block.
     pub assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
-    /// The consensus engine handle.
-    pub engine: Option<ConsensusEngineHandle<BscPayloadTypes>>,
 }
 
 impl<'a, EVM, Spec, R> BscBlockBuilder<'a, EVM, Spec, R>
@@ -57,12 +56,11 @@ where
             shared_ctx,
             parent,
             assembler,
-            engine: None,
         }
     }
 }
 
-impl<'a, DB, EVM, Spec, R, Factory> BlockBuilder for BscBlockBuilder<'a, EVM, Spec, R, Factory>
+impl<'a, DB, EVM, Spec, R> BlockBuilder for BscBlockBuilder<'a, EVM, Spec, R>
 where
     BscBlockExecutor<'a, EVM, Spec, R>: alloy_evm::block::BlockExecutor<
         Evm: alloy_evm::Evm<
@@ -78,7 +76,6 @@ where
     Spec: EthChainSpec + EthereumHardforks + BscHardforks + Hardforks + Clone,
     R::Transaction: Clone + SignerRecoverable,
     EVM: alloy_evm::Evm,
-    Factory: DatabaseProviderFactory<Provider: BlockReader> + Clone + Send + Sync + 'static,
 {
     type Primitives = BscPrimitives;
     type Executor = BscBlockExecutor<'a, EVM, Spec, R>;
@@ -123,15 +120,15 @@ where
         let parent_hash = self.parent.hash_slow();
         
         let (state_root, trie_updates) = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
-            // 使用并行状态根任务
+            tracing::debug!("use parallel state root calculation");
             let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                 let fut = async {
-                    request_parallel_state_root::<Factory>(&engine_api_tx, parent_hash).await
+                    request_parallel_state_root(&engine_api_tx, parent_hash).await
                 };
                 tokio::task::block_in_place(|| handle.block_on(fut))
             } else {
                 let fut = async {
-                    request_parallel_state_root::<Factory>(&engine_api_tx, parent_hash).await
+                    request_parallel_state_root(&engine_api_tx, parent_hash).await
                 };
                 match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                     Ok(rt) => {
@@ -147,6 +144,7 @@ where
                 .incremental_root_with_updates()
                 .map_err(BlockExecutionError::other)?
         } else {
+            tracing::debug!("use serial state root calculation");
             state
                 .state_root_with_updates(hashed_state.clone())
                 .map_err(BlockExecutionError::other)?
@@ -219,14 +217,17 @@ where
     }
 }
 
-pub async fn request_parallel_state_root<Factory>(
+type BscProviderFactory = reth_provider::providers::BlockchainProvider<
+    reth::api::NodeTypesWithDBAdapter<crate::node::BscNode, std::sync::Arc<reth_db::DatabaseEnv>>
+>;
+
+pub async fn request_parallel_state_root(
     engine_api_tx: &EngineApiTx<BscNode>,
     parent_hash: BlockHash,
-) -> Result<ParallelStateRoot<Factory>, BSCEngineMessageError> 
-where
-    Factory: DatabaseProviderFactory<Provider: BlockReader> + Clone + Send + Sync + 'static
-{
+) -> Result<ParallelStateRoot<BscProviderFactory>, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
-    let _ = engine_api_tx.send(CustomRequestMessage::RequestParallelStateRoot { parent_hash, tx });
+    let _ = engine_api_tx.send(EngineApiRequest::Custom(
+        CustomRequestMessage::RequestParallelStateRoot { parent_hash, tx }
+    ));
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }

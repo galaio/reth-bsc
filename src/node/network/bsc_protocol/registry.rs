@@ -3,6 +3,7 @@ use std::sync::RwLock;
 use std::sync::Arc;
 
 use alloy_primitives::U128;
+use alloy_primitives::U256;
 use once_cell::sync::Lazy;
 use reth_eth_wire::NewBlock;
 use reth_network::message::NewBlockMessage;
@@ -126,7 +127,7 @@ pub async fn batch_request_range_and_await_import(
                 td: U128::from(0u64),
             });
             let hash = block.header.hash_slow();
-            let msg = NewBlockMessage { hash, block: Arc::new(nb), td: U128::from(0u64) };
+            let msg = NewBlockMessage { hash, block: Arc::new(nb), td: Some(U256::ZERO) };
             if let Err(e) = sender.send((msg, peer)) {
                 tracing::error!(target: "bsc::registry", error=%e, "Failed to send block to import path");
             }

@@ -70,7 +70,7 @@ static IMPORTED_BLOCKS_TX: OnceLock<broadcast::Sender<B256>> = OnceLock::new();
 static ENGINE_API_TX: OnceLock<EngineApiTx<BscNode>> = OnceLock::new();
 
 /// Set global engine api tx if present.
-pub fn set_engine_api_tx(tx: EngineApiTx<BscNode>) {
+pub fn set_engine_api_tx(tx: EngineApiTx<BscNode>) -> Result<(), EngineApiTx<BscNode>> {
     ENGINE_API_TX.set(tx)
 }
 
