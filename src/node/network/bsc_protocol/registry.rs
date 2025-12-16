@@ -126,7 +126,7 @@ pub async fn batch_request_range_and_await_import(
                 td: U128::from(0u64),
             });
             let hash = block.header.hash_slow();
-            let msg = NewBlockMessage { hash, block: Arc::new(nb) };
+            let msg = NewBlockMessage { hash, block: Arc::new(nb), td: U128::from(0u64) };
             if let Err(e) = sender.send((msg, peer)) {
                 tracing::error!(target: "bsc::registry", error=%e, "Failed to send block to import path");
             }

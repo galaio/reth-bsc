@@ -2,6 +2,7 @@ use crate::consensus::parlia::SnapshotProvider;
 use std::sync::{Arc, OnceLock};
 use alloy_consensus::{Header, BlockHeader};
 use alloy_primitives::B256;
+use reth_node_builder::rpc::EngineApiTx;
 use reth_provider::{HeaderProvider, BlockNumReader};
 use crate::node::network::BscNetworkPrimitives;
 use reth_network::NetworkHandle;
@@ -16,7 +17,7 @@ use crate::node::engine_api::payload::BscPayloadTypes;
 use crate::node::primitives::BscBlock;
 use std::sync::RwLock;
 use schnellru::{LruMap, ByLength};
-use reth_engine_primitives::ConsensusEngineHandle;
+use crate::node::BscNode;
 
 /// Function type for HeaderProvider::header() access (by hash)
 type HeaderByHashFn = Arc<dyn Fn(&B256) -> Option<Header> + Send + Sync>;

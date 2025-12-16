@@ -4,6 +4,7 @@ use reth_engine_primitives::{BSCEngineMessageError, ConsensusEngineHandle};
 use reth_engine_tree::tree::CustomRequestMessage;
 use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
+use reth_node_builder::rpc::EngineApiTx;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
 use reth_provider::{BlockReader, DatabaseProviderFactory, StateProvider};
 use reth_trie_parallel::root::ParallelStateRoot;
@@ -11,6 +12,7 @@ use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use tokio::sync::oneshot;
+use crate::node::BscNode;
 
 
 /// rewrite BasicBlockBuilder, mainly about the finish() trait.

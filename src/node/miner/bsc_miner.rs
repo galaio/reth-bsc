@@ -2,7 +2,7 @@ use crate::{
     chainspec::BscChainSpec, consensus::parlia::{Parlia, provider::SnapshotProvider, vote_pool}, 
     metrics::BscConsensusMetrics,
     node::{
-        engine::BscBuiltPayload,  miner::{
+        engine::BscBuiltPayload, evm::BscEvmConfig, miner::{
             config::{MiningConfig, keystore}, payload::{BscPayloadBuilder, BscPayloadJob, BscPayloadJobHandle}, signer::init_global_signer_from_k256, util::prepare_new_attributes
         }, network::{BscNewBlock, block_import::service::{IncomingBlock, IncomingMinedBlock}}
     }, shared::{get_block_import_mined_sender, get_block_import_sender, get_local_peer_id_or_default}
@@ -884,7 +884,8 @@ where
         });
         let msg = NewBlockMessage { 
             hash: block_hash, 
-            block: Arc::new(new_block) 
+            block: Arc::new(new_block),
+            td: Some(alloy_primitives::U256::from(td.to::<u128>())),
         };
 
         if self.submit_built_payload {

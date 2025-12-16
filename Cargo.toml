@@ -13,47 +13,48 @@ name = "reth-bsc"
 path = "src/main.rs"
 
 [dependencies]
-reth = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-cli = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-cli-commands = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-basic-payload-builder = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-db = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-engine-local = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-engine-tree = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-chainspec = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-cli-util = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-discv4 = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e", features = ["test-utils"] }
-reth-engine-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-ethereum-forks = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e", features = ["serde"] }
-reth-ethereum-payload-builder = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-payload-builder-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-chain-state = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-ethereum-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-eth-wire = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-eth-wire-types = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-evm = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-evm-ethereum = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-metrics = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-node-core = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-revm = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-network = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e", features = ["test-utils"] }
-reth-network-p2p = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-network-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-node-ethereum = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e", features = ["test-utils"] }
-reth-network-peers = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-payload-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-ethereum-engine-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-primitives-traits = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-provider = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e", features = ["test-utils"] }
-reth-rpc-eth-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-rpc-engine-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-tracing = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-trie-common = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-trie-db = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-trie-parallel = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-tasks = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
-reth-transaction-pool = { git = "https://github.com/galaio/bnb-reth.git", rev = "091080ab33e375f71fbb9787bb2a229ee4ef7f5e" }
+reth = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-cli = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-cli-commands = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-basic-payload-builder = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-db = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-engine-local = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-engine-tree = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-chainspec = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-cli-util = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-discv4 = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe", features = ["test-utils"] }
+reth-engine-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-ethereum-forks = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe", features = ["serde"] }
+reth-ethereum-payload-builder = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-payload-builder-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-chain-state = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-ethereum-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-eth-wire = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-eth-wire-types = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-evm = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-evm-ethereum = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-metrics = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-node-core = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-revm = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-network = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe", features = ["test-utils"] }
+reth-network-p2p = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-network-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-node-builder = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-node-ethereum = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe", features = ["test-utils"] }
+reth-network-peers = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-payload-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-ethereum-engine-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-primitives = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-primitives-traits = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-provider = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe", features = ["test-utils"] }
+reth-rpc-eth-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-rpc-engine-api = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-tracing = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-trie-common = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-trie-db = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-trie-parallel = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-tasks = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
+reth-transaction-pool = { git = "https://github.com/galaio/bnb-reth.git", rev = "8a9ba9d7bcffb01b5ef7d89017493691aeba8dbe" }
 revm = "29.0.0"
 
 # alloy dependencies
