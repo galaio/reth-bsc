@@ -66,16 +66,16 @@ static PAYLOAD_EVENTS_TX: OnceLock<broadcast::Sender<Events<BscPayloadTypes>>> =
 static IMPORTED_BLOCKS_TX: OnceLock<broadcast::Sender<B256>> = OnceLock::new();
 
 /// Global engine handle for consensus engine
-static ENGINE_HANDLE: OnceLock<ConsensusEngineHandle<BscPayloadTypes>> = OnceLock::new();
+static ENGINE_API_TX: OnceLock<EngineApiTx<BscNode>> = OnceLock::new();
 
 /// Set global consensus engine handle. Returns an error if already set.
-pub fn set_engine_handle(handle: ConsensusEngineHandle<BscPayloadTypes>) -> Result<(), ConsensusEngineHandle<BscPayloadTypes>> {
-    ENGINE_HANDLE.set(handle)
+pub fn set_engine_api_tx(tx: EngineApiTx<BscNode>) -> Result<(), EngineApiTx<BscNode>> {
+    ENGINE_API_TX.set(tx)
 }
 
 /// Get global consensus engine handle if initialized.
-pub fn get_engine_handle() -> Option<ConsensusEngineHandle<BscPayloadTypes>> {
-    ENGINE_HANDLE.get().cloned()
+pub fn get_engine_api_tx() -> Option<EngineApiTx<BscNode>> {
+    ENGINE_API_TX.get().cloned()
 }
 
 /// Set global imported blocks broadcast sender.

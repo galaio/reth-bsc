@@ -2,7 +2,7 @@ use crate::{
     chainspec::BscChainSpec, consensus::parlia::{Parlia, provider::SnapshotProvider, vote_pool}, 
     metrics::BscConsensusMetrics,
     node::{
-        engine::BscBuiltPayload, engine_api::payload::BscPayloadTypes, evm::config::BscEvmConfig, miner::{
+        engine::BscBuiltPayload,  miner::{
             config::{MiningConfig, keystore}, payload::{BscPayloadBuilder, BscPayloadJob, BscPayloadJobHandle}, signer::init_global_signer_from_k256, util::prepare_new_attributes
         }, network::{BscNewBlock, block_import::service::{IncomingBlock, IncomingMinedBlock}}
     }, shared::{get_block_import_mined_sender, get_block_import_sender, get_local_peer_id_or_default}
@@ -13,7 +13,6 @@ use k256::ecdsa::SigningKey;
 use reth::transaction_pool::PoolTransaction;
 use reth::transaction_pool::TransactionPool;
 use reth_chainspec::EthChainSpec;
-use reth_engine_primitives::ConsensusEngineHandle;
 use reth_ethereum_payload_builder::EthereumBuilderConfig;
 use reth_payload_primitives::BuiltPayload;
 use reth_primitives::TransactionSigned;

@@ -271,10 +271,6 @@ impl BscNetworkBuilder {
                 .expect("node should only be launched once")
                 .await
                 .unwrap();
-
-            // Expose engine handle globally for components that need it (e.g., miner)
-            let _ = crate::shared::set_engine_handle(handle.clone());
-
             ImportService::new(
                 provider,
                 chain_spec,

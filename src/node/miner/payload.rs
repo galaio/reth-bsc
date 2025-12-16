@@ -42,8 +42,6 @@ use reth_chainspec::EthChainSpec;
 use reth_chainspec::EthereumHardforks;
 use crate::consensus::eip4844::{calc_blob_fee, BLOB_TX_BLOB_GAS_PER_BLOB};
 use std::sync::atomic::{AtomicU64, Ordering};
-use reth_engine_primitives::ConsensusEngineHandle;
-use crate::node::engine_api::payload::BscPayloadTypes;
 
 
 /// Delay left over for mining calculation
