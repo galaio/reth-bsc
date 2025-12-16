@@ -64,7 +64,7 @@ impl Command {
                     finalized.unwrap().expect("finalized block exists").header.hash;
 
                 next_block += 1;
-                // 检查receiver是否仍然活跃
+                // send block info to receiver
                 if sender
                     .send((
                         header,
@@ -75,7 +75,7 @@ impl Command {
                     .await
                     .is_err()
                 {
-                    // Receiver已关闭，退出任务
+                    // if receiver is closed, stop the block producer task
                     tracing::info!("Receiver closed, stopping block producer task");
                     break;
                 }
