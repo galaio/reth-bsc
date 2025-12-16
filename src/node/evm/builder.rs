@@ -122,16 +122,16 @@ where
         let hashed_state = state.hashed_post_state(&db.bundle_state);
         let parent_hash = self.parent.hash_slow();
         
-        let (state_root, trie_updates) = if let Some(engine) = crate::shared::get_engine_api_tx() {
+        let (state_root, trie_updates) = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
             // 使用并行状态根任务
             let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                 let fut = async {
-                    request_parallel_state_root::<Factory>(&engine, parent_hash).await
+                    request_parallel_state_root::<Factory>(&engine_api_tx, parent_hash).await
                 };
                 tokio::task::block_in_place(|| handle.block_on(fut))
             } else {
                 let fut = async {
-                    request_parallel_state_root::<Factory>(&engine, parent_hash).await
+                    request_parallel_state_root::<Factory>(&engine_api_tx, parent_hash).await
                 };
                 match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                     Ok(rt) => {
