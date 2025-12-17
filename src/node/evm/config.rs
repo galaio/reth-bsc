@@ -5,7 +5,7 @@ use super::{
     factory::BscEvmFactory,
 };
 use crate::{
-    BscPrimitives, chainspec::BscChainSpec, consensus::parlia::VoteAddress, evm::transaction::BscTxEnv, hardforks::{BscHardforks, bsc::BscHardfork}, node::engine_api::validator::BscExecutionData, system_contracts::{SystemContract, feynman_fork::ValidatorElectionInfo}
+    BscPrimitives, chainspec::BscChainSpec, consensus::parlia::VoteAddress, evm::transaction::BscTxEnv, hardforks::{BscHardforks, bsc::BscHardfork}, node::{engine_api::validator::BscExecutionData, evm::builder::request_parallel_ctx}, system_contracts::{SystemContract, feynman_fork::ValidatorElectionInfo}
 };
 use alloy_consensus::{transaction::SignerRecoverable, BlockHeader, Header, TxReceipt};
 use alloy_eips::eip7840::BlobParams;
@@ -20,6 +20,7 @@ use reth_evm::{
     FromRecoveredTx, FromTxWithEncoded, InspectorFor, IntoTxEnv, NextBlockEnvAttributes,
 };
 use reth_evm_ethereum::RethReceiptBuilder;
+use reth_node_builder::TreeConfig;
 use reth_primitives::{BlockTy, HeaderTy, SealedBlock, SealedHeader, TransactionSigned};
 use reth_revm::State;
 use revm::{
@@ -124,132 +125,119 @@ impl BscEvmConfig {
         parent: &'a SealedHeader<<Self::Primitives as NodePrimitives>::BlockHeader>,
         attributes: Self::NextBlockEnvCtx,
     ) -> Result<BscBlockBuilder<'a, Self::EvmFactory, Self::Spec, Self::ReceiptBuilder, Self>, Self::Error> {
-        let evm_env = self.next_evm_env(parent, &attributes)?;
-        
-        // just init a default custom ctx for mining block.
-        let shared_ctx = BscExecutionSharedCtx::default();
-        let payload_processor = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
-            tracing::debug!("use parallel payload processor");
-            let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                let fut = async {
-                    request_payload_processor(&engine_api_tx).await
-                };
-                tokio::task::block_in_place(|| handle.block_on(fut))
-            } else {
-                let fut = async {
-                    request_payload_processor(&engine_api_tx).await
-                };
-                match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt.block_on(fut),
-                    Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
-                }
+        if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
+            tracing::debug!("use sparse trie state root calculation");
+            let evm_env = self.next_evm_env(parent, &attributes)?;
+            // just init a default custom ctx for mining block.
+            let shared_ctx = BscExecutionSharedCtx::default();
+            let payload_processor = {
+                tracing::debug!("request parallel payload processor");
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let fut = async {
+                        request_payload_processor(&engine_api_tx).await
+                    };
+                    tokio::task::block_in_place(|| handle.block_on(fut))
+                } else {
+                    let fut = async {
+                        request_payload_processor(&engine_api_tx).await
+                    };
+                    match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                        Ok(rt) => rt.block_on(fut),
+                        Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
+                    }
+                }?
             };
-            match res {
-                Ok(proc) => Some(proc),
-                Err(err) => {
-                    tracing::warn!("Failed to get payload processor: {err}");
-                    None
-                }
-            }
-        } else {
-            None
-        };
-
-        let (trie_input, consistent_db_view, state_provider_builder, persisting_kind) = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
-            tracing::debug!("use parallel payload processor");
-            let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                let fut = async {
-                    request_parallel_ctx(&engine_api_tx).await
-                };
-                tokio::task::block_in_place(|| handle.block_on(fut))
-            } else {
-                let fut = async {
-                    request_parallel_ctx(&engine_api_tx).await
-                };
-                match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => rt.block_on(fut),
-                    Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
-                }
+    
+            let parallel_ctx = {
+                tracing::debug!("request parallel ctx");
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let fut = async {
+                        request_parallel_ctx(&engine_api_tx, parent.hash(), payload_processor.take_trie_input()).await
+                    };
+                    tokio::task::block_in_place(|| handle.block_on(fut))
+                } else {
+                    let fut = async {
+                        request_parallel_ctx(&engine_api_tx, parent.hash(), payload_processor.take_trie_input()).await
+                    };
+                    match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                        Ok(rt) => rt.block_on(fut),
+                        Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
+                    }
+                }?
             };
-            match res {
-                Ok(proc) => Some(proc),
-                Err(err) => {
-                    tracing::warn!("Failed to get payload processor: {err}");
-                    None
-                }
+    
+            if parallel_ctx.persisting_kind.can_run_parallel_state_root() {
+                tracing::debug!("run sparse state root calculation");
+                // TODO: check has_ancestors_with_missing_trie_updates
+                let state_provider = CachedStateProvider::new_with_caches(
+                    state_provider,
+                    payload_handle.caches(),
+                    payload_handle.cache_metrics(),
+                );
+                let mut db = State::builder()
+                .with_database(StateProviderDatabase::new(&state_provider))
+                .with_bundle_update()
+                .without_state_clear()
+                .build();
+    
+                let evm = self.evm_with_env(&mut db, evm_env.clone());
+                let ctx = self.context_for_next_block(parent, attributes);
+                let mut executor = BscBlockExecutor::new(
+                    evm,
+                    ctx.clone(),
+                    shared_ctx.clone(),
+                    self.executor_factory.spec().clone(),
+                    *self.executor_factory.receipt_builder(),
+                    SystemContract::new(self.executor_factory.spec().clone()),
+                );
+                executor.with_state_hook(Box::new(payload_handle.state_hook()));
+
+                // spawn the payload processor
+                let payload_handle = payload_processor.spawn(
+                    ctx.clone(),
+                    vec![],
+                    parallel_ctx.state_provider_builder,
+                    parallel_ctx.consistent_view,
+                    parallel_ctx.trie_input,
+                    TreeConfig::default(), // TODO: use the real config
+                )
+    
+                // TODO: implement the state root computation later
+                // after executing the block we can stop executing transactions
+                // payload_handle.stop_prewarming_execution();
+                // match handle.state_root() {
+                //     Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
+                //         let elapsed = root_time.elapsed();
+                //         info!(target: "engine::tree", ?state_root, ?elapsed, "State root task finished");
+                //         // we double check the state root here for good measure
+                //         if state_root == block.header().state_root() {
+                //             maybe_state_root = Some((state_root, trie_updates, elapsed))
+                //         } else {
+                //             warn!(
+                //                 target: "engine::tree",
+                //                 ?state_root,
+                //                 block_state_root = ?block.header().state_root(),
+                //                 "State root task returned incorrect state root"
+                //             );
+                //         }
+                //     }
+                //     Err(error) => {
+                //         debug!(target: "engine::tree", %error, "Background parallel state root computation failed");
+                //     }
+                // }
+                return Ok(BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
+                    executor,
+                    ctx,
+                    shared_ctx,
+                    &self.block_assembler,
+                    parent,
+                    payload_processor: Some(payload_processor),
+                    payload_handle: Some(payload_handle),
+                ));
             }
-        } else {
-            None
-        };
-
-        if persisting_kind.can_run_parallel_state_root() {
-            tracing::debug!("run sparse state root calculation");
-            // TODO: check has_ancestors_with_missing_trie_updates
-            let allocated_trie_input = payload_processor.take_trie_input();
-            let payload_handle = payload_processor.spawn(
-                env.clone(),
-                txs,
-                state_provider_builder,
-                consistent_view,
-                trie_input,
-                &self.config,
-            )
-            let state_provider = CachedStateProvider::new_with_caches(
-                state_provider,
-                payload_handle.caches(),
-                payload_handle.cache_metrics(),
-            );
-            let mut db = State::builder()
-            .with_database(StateProviderDatabase::new(&state_provider))
-            .with_bundle_update()
-            .without_state_clear()
-            .build();
-
-            let evm = self.evm_with_env(&mut db, evm_env.clone());
-            let ctx = self.context_for_next_block(parent, attributes);
-            let mut executor = BscBlockExecutor::new(
-                evm,
-                ctx.clone(),
-                shared_ctx.clone(),
-                self.executor_factory.spec().clone(),
-                *self.executor_factory.receipt_builder(),
-                SystemContract::new(self.executor_factory.spec().clone()),
-            );
-            executor.with_state_hook(Box::new(payload_handle.state_hook()));
-
-            // TODO: implement the state root computation later
-            // after executing the block we can stop executing transactions
-            // payload_handle.stop_prewarming_execution();
-            // match handle.state_root() {
-            //     Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
-            //         let elapsed = root_time.elapsed();
-            //         info!(target: "engine::tree", ?state_root, ?elapsed, "State root task finished");
-            //         // we double check the state root here for good measure
-            //         if state_root == block.header().state_root() {
-            //             maybe_state_root = Some((state_root, trie_updates, elapsed))
-            //         } else {
-            //             warn!(
-            //                 target: "engine::tree",
-            //                 ?state_root,
-            //                 block_state_root = ?block.header().state_root(),
-            //                 "State root task returned incorrect state root"
-            //             );
-            //         }
-            //     }
-            //     Err(error) => {
-            //         debug!(target: "engine::tree", %error, "Background parallel state root computation failed");
-            //     }
-            // }
         }
-        Ok(BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
-            executor,
-            ctx,
-            shared_ctx,
-            &self.block_assembler,
-            parent,
-            payload_processor,
-            payload_handle,
-        ))
+        
+        return self.builder_for_next_block(db, parent, attributes);
     }
 }
 

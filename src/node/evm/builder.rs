@@ -55,7 +55,6 @@ where
         shared_ctx: BscExecutionSharedCtx,
         assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
         parent: &'a SealedHeader<HeaderTy<BscPrimitives>>,
-        payload_processor: Option<PayloadProcessor<CEvm>>,
     ) -> Self {
         Self {
             executor,
@@ -64,7 +63,8 @@ where
             shared_ctx,
             parent,
             assembler,
-            payload_processor,
+            payload_processor: None,
+            payload_handle: None,
         }
     }
 }
@@ -251,15 +251,15 @@ pub async fn request_payload_processor(
     ));
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }
-
 pub async fn request_parallel_ctx(
     engine_api_tx: &EngineApiTx<NodeAdapter<BscNode>>,
     parent_hash: BlockHash,
     allocated_trie_input: TrieInput,
-) -> Result<(TrieInput, ConsistentDbView<P>, Option<StateProviderBuilder<N, P>>, PersistingKind), BSCEngineMessageError> {
+) -> Result<CustomParallelCtx, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
     let _ = engine_api_tx.send(EngineApiRequest::Custom(
         CustomRequestMessage::RequestParallelCtx { parent_hash, allocated_trie_input, tx }
     ));
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }
+
