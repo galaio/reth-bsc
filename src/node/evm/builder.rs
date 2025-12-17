@@ -1,9 +1,9 @@
 use crate::{BscPrimitives, hardforks::BscHardforks, node::{evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
 use alloy_primitives::BlockHash;
 use reth_engine_primitives::{BSCEngineMessageError};
-use reth_engine_tree::engine::EngineApiRequest;
+use reth_engine_tree::{engine::EngineApiRequest, tree::PayloadProcessor};
 use reth_engine_tree::tree::CustomRequestMessage;
-use reth_evm::execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx};
+use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx}};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_node_builder::rpc::EngineApiTx;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
@@ -18,10 +18,11 @@ use crate::node::BscNode;
 
 /// rewrite BasicBlockBuilder, mainly about the finish() trait.
 /// add system txs to sealed block.
-pub struct BscBlockBuilder<'a, EVM, Spec, R>
+pub struct BscBlockBuilder<'a, EVM, Spec, R, CEvm>
 where
     R: ReceiptBuilder,
     Spec: EthChainSpec + EthereumHardforks + BscHardforks + Hardforks + Clone,
+    CEvm: ConfigureEvm,
 {
     /// The block executor used to execute transactions.
     pub executor: BscBlockExecutor<'a, EVM, Spec, R>,
@@ -35,12 +36,15 @@ where
     pub parent: &'a SealedHeader<HeaderTy<BscPrimitives>>,
     /// The assembler used to build the block.
     pub assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
+    /// Payload processor for state root computation.
+    pub payload_processor: Option<PayloadProcessor<CEvm>>,
 }
 
-impl<'a, EVM, Spec, R> BscBlockBuilder<'a, EVM, Spec, R>
+impl<'a, EVM, Spec, R, CEvm> BscBlockBuilder<'a, EVM, Spec, R, CEvm>
 where
     R: ReceiptBuilder,
     Spec: EthChainSpec + EthereumHardforks + BscHardforks + Hardforks + Clone,
+    CEvm: ConfigureEvm,
 {
     pub fn new(
         executor: BscBlockExecutor<'a, EVM, Spec, R>,
@@ -48,6 +52,7 @@ where
         shared_ctx: BscExecutionSharedCtx,
         assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
         parent: &'a SealedHeader<HeaderTy<BscPrimitives>>,
+        payload_processor: Option<PayloadProcessor<CEvm>>,
     ) -> Self {
         Self {
             executor,
@@ -56,11 +61,12 @@ where
             shared_ctx,
             parent,
             assembler,
+            payload_processor,
         }
     }
 }
 
-impl<'a, DB, EVM, Spec, R> BlockBuilder for BscBlockBuilder<'a, EVM, Spec, R>
+impl<'a, DB, EVM, Spec, R, CEvm> BlockBuilder for BscBlockBuilder<'a, EVM, Spec, R, CEvm>
 where
     BscBlockExecutor<'a, EVM, Spec, R>: alloy_evm::block::BlockExecutor<
         Evm: alloy_evm::Evm<
@@ -76,6 +82,7 @@ where
     Spec: EthChainSpec + EthereumHardforks + BscHardforks + Hardforks + Clone,
     R::Transaction: Clone + SignerRecoverable,
     EVM: alloy_evm::Evm,
+    CEvm: ConfigureEvm,
 {
     type Primitives = BscPrimitives;
     type Executor = BscBlockExecutor<'a, EVM, Spec, R>;
@@ -228,6 +235,29 @@ pub async fn request_parallel_state_root(
     let (tx, rx) = oneshot::channel();
     let _ = engine_api_tx.send(EngineApiRequest::Custom(
         CustomRequestMessage::RequestParallelStateRoot { parent_hash, tx }
+    ));
+    rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
+}
+
+pub async fn request_payload_processor(
+    engine_api_tx: &EngineApiTx<BscNode>,
+    parent_hash: BlockHash,
+) -> Result<PayloadProcessor<CEvm>, BSCEngineMessageError> {
+    let (tx, rx) = oneshot::channel();
+    let _ = engine_api_tx.send(EngineApiRequest::Custom(
+        CustomRequestMessage::RequestPayloadProcessor { tx }
+    ));
+    rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
+}
+
+pub async fn request_payload_processor(
+    engine_api_tx: &EngineApiTx<BscNode>,
+    parent_hash: BlockHash,
+    allocated_trie_input: TrieInput,
+) -> Result<(TrieInput, ConsistentDbView<P>, Option<StateProviderBuilder<N, P>>, PersistingKind), BSCEngineMessageError> {
+    let (tx, rx) = oneshot::channel();
+    let _ = engine_api_tx.send(EngineApiRequest::Custom(
+        CustomRequestMessage::RequestParallelCtx { parent_hash, allocated_trie_input, tx }
     ));
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }

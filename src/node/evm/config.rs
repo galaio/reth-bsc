@@ -388,13 +388,37 @@ where
             *self.executor_factory.receipt_builder(),
             SystemContract::new(self.executor_factory.spec().clone()),
         );
-        
-        BscBlockBuilder::new(
+        let payload_processor = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
+            tracing::debug!("use parallel state root calculation");
+            let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                let fut = async {
+                    request_payload_processor(&engine_api_tx).await
+                };
+                tokio::task::block_in_place(|| handle.block_on(fut))
+            } else {
+                let fut = async {
+                    request_payload_processor(&engine_api_tx).await
+                };
+                match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                    Ok(rt) => {
+                        rt.block_on(fut)
+                    }
+                    Err(err) => {
+                        Err(BSCEngineMessageError::internal(err))
+                    }
+                }
+            }.map_err(BlockExecutionError::other)?;
+            
+        } else {
+            None
+        };
+        BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
             bsc_executor,
             ctx,
             shared_ctx,
             &self.block_assembler,
             parent,
+            payload_processor,
         )
     }
 }
