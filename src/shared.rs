@@ -3,6 +3,7 @@ use std::sync::{Arc, OnceLock};
 use alloy_consensus::{Header, BlockHeader};
 use alloy_primitives::B256;
 use reth_node_builder::rpc::EngineApiTx;
+use reth::builder::NodeAdapter;
 use reth_provider::{HeaderProvider, BlockNumReader};
 use crate::node::network::BscNetworkPrimitives;
 use reth_network::NetworkHandle;
@@ -67,15 +68,15 @@ static PAYLOAD_EVENTS_TX: OnceLock<broadcast::Sender<Events<BscPayloadTypes>>> =
 static IMPORTED_BLOCKS_TX: OnceLock<broadcast::Sender<B256>> = OnceLock::new();
 
 /// Global engine api tx (custom request sender)
-static ENGINE_API_TX: OnceLock<EngineApiTx<BscNode>> = OnceLock::new();
+static ENGINE_API_TX: OnceLock<EngineApiTx<NodeAdapter<BscNode>>> = OnceLock::new();
 
 /// Set global engine api tx if present.
-pub fn set_engine_api_tx(tx: EngineApiTx<BscNode>) -> Result<(), EngineApiTx<BscNode>> {
+pub fn set_engine_api_tx(tx: EngineApiTx<NodeAdapter<BscNode>>) -> Result<(), EngineApiTx<NodeAdapter<BscNode>>> {
     ENGINE_API_TX.set(tx)
 }
 
 /// Get global consensus engine handle if initialized.
-pub fn get_engine_api_tx() -> Option<EngineApiTx<BscNode>> {
+pub fn get_engine_api_tx() -> Option<EngineApiTx<NodeAdapter<BscNode>>> {
     ENGINE_API_TX.get().cloned()
 }
 

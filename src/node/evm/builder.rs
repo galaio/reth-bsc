@@ -6,6 +6,7 @@ use reth_engine_tree::tree::CustomRequestMessage;
 use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx}};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_node_builder::rpc::EngineApiTx;
+use reth::builder::NodeAdapter;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
 use reth_provider::StateProvider;
 use reth_trie_parallel::root::ParallelStateRoot;
@@ -38,6 +39,8 @@ where
     pub assembler: &'a BscBlockAssembler<crate::chainspec::BscChainSpec>,
     /// Payload processor for state root computation.
     pub payload_processor: Option<PayloadProcessor<CEvm>>,
+    /// Payload handle for state root computation.
+    pub payload_handle: Option<PayloadHandle>,
 }
 
 impl<'a, EVM, Spec, R, CEvm> BscBlockBuilder<'a, EVM, Spec, R, CEvm>
@@ -229,7 +232,7 @@ type BscProviderFactory = reth_provider::providers::BlockchainProvider<
 >;
 
 pub async fn request_parallel_state_root(
-    engine_api_tx: &EngineApiTx<BscNode>,
+    engine_api_tx: &EngineApiTx<NodeAdapter<BscNode>>,
     parent_hash: BlockHash,
 ) -> Result<ParallelStateRoot<BscProviderFactory>, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
@@ -240,9 +243,8 @@ pub async fn request_parallel_state_root(
 }
 
 pub async fn request_payload_processor(
-    engine_api_tx: &EngineApiTx<BscNode>,
-    parent_hash: BlockHash,
-) -> Result<PayloadProcessor<CEvm>, BSCEngineMessageError> {
+    engine_api_tx: &EngineApiTx<NodeAdapter<BscNode>>,
+) -> Result<PayloadProcessor<crate::node::evm::config::BscEvmConfig>, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
     let _ = engine_api_tx.send(EngineApiRequest::Custom(
         CustomRequestMessage::RequestPayloadProcessor { tx }
@@ -250,8 +252,8 @@ pub async fn request_payload_processor(
     rx.await.map_err(BSCEngineMessageError::internal)?.map_err(BSCEngineMessageError::internal)
 }
 
-pub async fn request_payload_processor(
-    engine_api_tx: &EngineApiTx<BscNode>,
+pub async fn request_parallel_ctx(
+    engine_api_tx: &EngineApiTx<NodeAdapter<BscNode>>,
     parent_hash: BlockHash,
     allocated_trie_input: TrieInput,
 ) -> Result<(TrieInput, ConsistentDbView<P>, Option<StateProviderBuilder<N, P>>, PersistingKind), BSCEngineMessageError> {
