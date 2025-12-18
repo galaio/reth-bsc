@@ -1,7 +1,7 @@
-use crate::{BscPrimitives, hardforks::BscHardforks, node::{evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}}};
+use crate::{BscPrimitives, hardforks::BscHardforks, node::evm::{assembler::{BscBlockAssembler, BscBlockAssemblerInput}, config::{BscBlockExecutionCtx, BscBlockExecutorFactory, BscExecutionSharedCtx, STATE_ROOT_ALGORITHM}, executor::BscBlockExecutor, factory::BscEvmFactory, pre_execution::{TURN_LENGTH_CACHE, VALIDATOR_CACHE}}};
 use alloy_primitives::BlockHash;
 use reth_engine_primitives::{BSCEngineMessageError};
-use reth_engine_tree::{engine::EngineApiRequest, tree::PayloadProcessor};
+use reth_engine_tree::{engine::EngineApiRequest, tree::{PayloadProcessor, sparse_trie::StateRootComputeOutcome}};
 use reth_engine_tree::tree::{CustomRequestMessage, PayloadHandle, CustomParallelCtx};
 use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx, WithTxEnv}};
 use crate::evm::transaction::BscTxEnv;
@@ -140,36 +140,59 @@ where
         let hashed_state = state.hashed_post_state(&db.bundle_state);
         let parent_hash = self.parent.hash_slow();
         
-        let (state_root, trie_updates) = if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
-            tracing::debug!("use parallel state root calculation");
-            let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                let fut = async {
-                    request_parallel_state_root(&engine_api_tx, parent_hash).await
-                };
-                tokio::task::block_in_place(|| handle.block_on(fut))
-            } else {
-                let fut = async {
-                    request_parallel_state_root(&engine_api_tx, parent_hash).await
-                };
-                match tokio::runtime::Builder::new_current_thread().enable_all().build() {
-                    Ok(rt) => {
-                        rt.block_on(fut)
+        let (state_root, trie_updates) = match STATE_ROOT_ALGORITHM {
+            "sparse" => {
+                tracing::debug!("use sparse state root calculation");
+                match self.payload_handle.as_mut().unwrap().state_root() {
+                    Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
+                        (state_root, trie_updates)
                     }
-                    Err(err) => {
-                        Err(BSCEngineMessageError::internal(err))
+                    Err(error) => {
+                        return Err(BlockExecutionError::other(error));
                     }
                 }
-            }.map_err(BlockExecutionError::other)?;
-            parallel_state_root_task.append_state(&hashed_state);
-            parallel_state_root_task
-                .incremental_root_with_updates()
-                .map_err(BlockExecutionError::other)?
-        } else {
-            tracing::debug!("use serial state root calculation");
-            state
-                .state_root_with_updates(hashed_state.clone())
-                .map_err(BlockExecutionError::other)?
+            }
+            "parallel" => {
+                tracing::debug!("use parallel state root calculation");
+                let engine_api_tx = match crate::shared::get_engine_api_tx() {
+                    Some(tx) => tx,
+                    None => {
+                        return Err(BlockExecutionError::other(
+                            std::io::Error::new(std::io::ErrorKind::Other, "engine api not found"),
+                        ))
+                    }
+                };
+                let mut parallel_state_root_task = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let fut = async {
+                        request_parallel_state_root(&engine_api_tx, parent_hash).await
+                    };
+                    tokio::task::block_in_place(|| handle.block_on(fut))
+                } else {
+                    let fut = async {
+                        request_parallel_state_root(&engine_api_tx, parent_hash).await
+                    };
+                    match tokio::runtime::Builder::new_current_thread().enable_all().build() {
+                        Ok(rt) => {
+                            rt.block_on(fut)
+                        }
+                        Err(err) => {
+                            Err(BSCEngineMessageError::internal(err))
+                        }
+                    }
+                }.map_err(BlockExecutionError::other)?;
+                parallel_state_root_task.append_state(&hashed_state);
+                parallel_state_root_task
+                    .incremental_root_with_updates()
+                    .map_err(BlockExecutionError::other)?
+            }
+            _ => {
+                tracing::debug!("use serial state root calculation");
+                state
+                    .state_root_with_updates(hashed_state.clone())
+                    .map_err(BlockExecutionError::other)?
+            }
         };
+
         let state_root_duration = state_root_start.elapsed();
 
         let user_tx_len = self.transactions.len();

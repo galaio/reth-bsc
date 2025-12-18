@@ -171,7 +171,7 @@ where
         let mut db = State::builder().with_database(cached_reads.as_db_mut(state)).with_bundle_update().build();
         
         let mut builder = self.evm_config
-            .builder_sparse_trie_for_next_block(
+            .bsc_builder_for_next_block(
                 &mut db,
                 &parent_header,
                 NextBlockEnvAttributes {
