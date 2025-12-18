@@ -15,6 +15,8 @@ use reth_trie_parallel::root::ParallelStateRoot;
 use reth_trie_common::TrieInput;
 use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
+use alloy_evm::block::StateChangeSource;
+use reth_evm::OnStateHook;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use tokio::sync::oneshot;
 use crate::node::BscNode;
@@ -143,7 +145,17 @@ where
         let (state_root, trie_updates) = match STATE_ROOT_ALGORITHM {
             "sparse" => {
                 tracing::debug!("use sparse state root calculation");
-                match self.payload_handle.as_mut().unwrap().state_root() {
+                let payload_handle = self.payload_handle.as_mut().unwrap();
+                // TODO: uncomment this when we have a way to stop the prewarming execution.
+                // payload_handle.stop_prewarming_execution();
+
+                // TODO: submit the final state to the state hook again.
+                // let mut state_hook = payload_handle.state_hook();
+                // let source_index = result.receipts.len();
+                // // Note: OnStateHook 期望的是 EvmState(HashMap<Address, Account>)，此处仅做空回补以满足接口
+                // let empty_evm_state: std::collections::HashMap<alloy_primitives::Address, revm::revm_state::Account> = Default::default();
+                // state_hook.on_state(StateChangeSource::Transaction(source_index), &empty_evm_state);
+                match payload_handle.state_root() {
                     Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
                         (state_root, trie_updates)
                     }

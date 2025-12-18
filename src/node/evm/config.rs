@@ -9,7 +9,7 @@ use crate::{
 };
 use alloy_consensus::{transaction::SignerRecoverable, BlockHeader, Header, TxReceipt};
 use alloy_eips::eip7840::BlobParams;
-use alloy_primitives::{Address, Log, U256};
+use alloy_primitives::{Address, B256, Log, U256};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use reth_ethereum_forks::EthereumHardfork;
 use reth_evm::{
@@ -32,7 +32,7 @@ use revm::{
 use std::{borrow::Cow, cell::RefCell, convert::Infallible, rc::Rc, sync::Arc};
 use crate::node::evm::builder::request_payload_processor;
 
-pub const STATE_ROOT_ALGORITHM: &str = "sparse";
+pub const STATE_ROOT_ALGORITHM: &str = "sparse"; // available: sparse, parallel, serial
 
 /// Type alias for system transactions to reduce complexity
 type SystemTxs = Vec<reth_primitives_traits::Recovered<reth_primitives_traits::TxTy<crate::BscPrimitives>>>;
@@ -206,7 +206,7 @@ impl BscEvmConfig {
                     let payload_handle = payload_processor.spawn(
                         ExecutionEnv {
                             evm_env: evm_env.clone(),
-                            hash: parent.hash(),
+                            hash: B256::ZERO,
                             parent_hash: parent.hash(),
                         },
                         empty_iter,
@@ -240,29 +240,6 @@ impl BscEvmConfig {
                         *self.executor_factory.receipt_builder(),
                         SystemContract::new(self.executor_factory.spec().clone()),
                     );
-                    // TODO: implement the state root computation later
-                    // after executing the block we can stop executing transactions
-                    // payload_handle.stop_prewarming_execution();
-                    // match handle.state_root() {
-                    //     Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
-                    //         let elapsed = root_time.elapsed();
-                    //         info!(target: "engine::tree", ?state_root, ?elapsed, "State root task finished");
-                    //         // we double check the state root here for good measure
-                    //         if state_root == block.header().state_root() {
-                    //             maybe_state_root = Some((state_root, trie_updates, elapsed))
-                    //         } else {
-                    //             warn!(
-                    //                 target: "engine::tree",
-                    //                 ?state_root,
-                    //                 block_state_root = ?block.header().state_root(),
-                    //                 "State root task returned incorrect state root"
-                    //             );
-                    //         }
-                    //     }
-                    //     Err(error) => {
-                    //         debug!(target: "engine::tree", %error, "Background parallel state root computation failed");
-                    //     }
-                    // }
     
                     bsc_executor.set_state_hook(Some(Box::new(payload_handle.state_hook())));
                     let mut builder = BscBlockBuilder::<_, _, _, BscEvmConfig>::new(

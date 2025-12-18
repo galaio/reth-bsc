@@ -409,7 +409,6 @@ where
         transition.info = None;
         self.evm.db_mut().apply_transition(vec![(SYSTEM_ADDRESS, transition)]);
         let balance_increment = vec![(validator, block_reward)];
-
         self.evm
             .db_mut()
             .increment_balances(balance_increment)
