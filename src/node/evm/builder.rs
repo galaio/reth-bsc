@@ -2,7 +2,7 @@ use crate::{BscPrimitives, hardforks::BscHardforks, node::{evm::{assembler::{Bsc
 use alloy_primitives::BlockHash;
 use reth_engine_primitives::{BSCEngineMessageError};
 use reth_engine_tree::{engine::EngineApiRequest, tree::PayloadProcessor};
-use reth_engine_tree::tree::CustomRequestMessage;
+use reth_engine_tree::tree::{CustomRequestMessage, PayloadHandle, CustomParallelCtx};
 use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx}};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_node_builder::rpc::EngineApiTx;
@@ -10,6 +10,7 @@ use reth::builder::NodeAdapter;
 use reth_primitives_traits::{HeaderTy, NodePrimitives, Recovered, RecoveredBlock, SealedHeader, SignerRecoverable, TxTy};
 use reth_provider::StateProvider;
 use reth_trie_parallel::root::ParallelStateRoot;
+use reth_trie_common::TrieInput;
 use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
@@ -40,7 +41,7 @@ where
     /// Payload processor for state root computation.
     pub payload_processor: Option<PayloadProcessor<CEvm>>,
     /// Payload handle for state root computation.
-    pub payload_handle: Option<PayloadHandle>,
+    pub payload_handle: Option<PayloadHandle<<BscPrimitives as NodePrimitives>::SignedTx, BSCEngineMessageError>>,
 }
 
 impl<'a, EVM, Spec, R, CEvm> BscBlockBuilder<'a, EVM, Spec, R, CEvm>
@@ -254,8 +255,8 @@ pub async fn request_payload_processor(
 pub async fn request_parallel_ctx(
     engine_api_tx: &EngineApiTx<NodeAdapter<BscNode>>,
     parent_hash: BlockHash,
-    allocated_trie_input: TrieInput,
-) -> Result<CustomParallelCtx, BSCEngineMessageError> {
+    allocated_trie_input: Option<TrieInput>,
+) -> Result<CustomParallelCtx<BscProviderFactory, BscPrimitives>, BSCEngineMessageError> {
     let (tx, rx) = oneshot::channel();
     let _ = engine_api_tx.send(EngineApiRequest::Custom(
         CustomRequestMessage::RequestParallelCtx { parent_hash, allocated_trie_input, tx }

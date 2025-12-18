@@ -23,6 +23,9 @@ use reth_evm_ethereum::RethReceiptBuilder;
 use reth_node_builder::TreeConfig;
 use reth_primitives::{BlockTy, HeaderTy, SealedBlock, SealedHeader, TransactionSigned};
 use reth_revm::State;
+use alloy_evm::block::BlockExecutor;
+use reth_engine_tree::tree::ExecutionEnv;
+use revm::inspector::NoOpInspector;
 use revm::{
     Inspector, context::{BlockEnv, CfgEnv}, context_interface::block::BlobExcessGasAndPrice, primitives::{hardfork::SpecId}
 };
@@ -101,6 +104,8 @@ impl BscEvmConfig {
     }
 }
 
+ 
+
 impl BscEvmConfig {
     /// Creates a new Ethereum EVM configuration with the given chain spec and EVM factory.
     pub fn new_with_evm_factory(chain_spec: Arc<BscChainSpec>, evm_factory: BscEvmFactory) -> Self {
@@ -119,38 +124,52 @@ impl BscEvmConfig {
         self.executor_factory.spec()
     }
 
-    pub fn builder_sparse_trie_for_next_block<'a, DB: Database>(
+    pub fn builder_sparse_trie_for_next_block<'a, DB>(
         &'a self,
         db: &'a mut State<DB>,
-        parent: &'a SealedHeader<<Self::Primitives as NodePrimitives>::BlockHeader>,
-        attributes: Self::NextBlockEnvCtx,
-    ) -> Result<BscBlockBuilder<'a, Self::EvmFactory, Self::Spec, Self::ReceiptBuilder, Self>, Self::Error> {
+        parent: &'a SealedHeader<HeaderTy<<BscEvmConfig as ConfigureEvm>::Primitives>>,
+        attributes: <BscEvmConfig as ConfigureEvm>::NextBlockEnvCtx,
+    ) -> Result<
+        BscBlockBuilder<
+            'a,
+            <BscEvmFactory as EvmFactory>::Evm<&'a mut State<DB>, NoOpInspector>,
+            Arc<BscChainSpec>,
+            RethReceiptBuilder,
+            BscEvmConfig,
+        >,
+        <BscEvmConfig as ConfigureEvm>::Error,
+    >
+    where
+        DB: Database,
+    {
+        let evm_env = self.next_evm_env(parent, &attributes)?;
         if let Some(engine_api_tx) = crate::shared::get_engine_api_tx() {
             tracing::debug!("use sparse trie state root calculation");
-            let evm_env = self.next_evm_env(parent, &attributes)?;
             // just init a default custom ctx for mining block.
             let shared_ctx = BscExecutionSharedCtx::default();
-            let payload_processor = {
+            let mut payload_processor = {
                 tracing::debug!("request parallel payload processor");
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
-                    let fut = async {
-                        request_payload_processor(&engine_api_tx).await
-                    };
+                let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    let fut = async { request_payload_processor(&engine_api_tx).await };
                     tokio::task::block_in_place(|| handle.block_on(fut))
                 } else {
-                    let fut = async {
-                        request_payload_processor(&engine_api_tx).await
-                    };
+                    let fut = async { request_payload_processor(&engine_api_tx).await };
                     match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                         Ok(rt) => rt.block_on(fut),
                         Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
                     }
-                }?
+                };
+                match res {
+                    Ok(p) => p,
+                    Err(_) => {
+                        panic!("Failed to get payload processor from engine api");
+                    }
+                }
             };
     
             let parallel_ctx = {
                 tracing::debug!("request parallel ctx");
-                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                     let fut = async {
                         request_parallel_ctx(&engine_api_tx, parent.hash(), payload_processor.take_trie_input()).await
                     };
@@ -163,45 +182,60 @@ impl BscEvmConfig {
                         Ok(rt) => rt.block_on(fut),
                         Err(err) => Err(reth_engine_primitives::BSCEngineMessageError::internal(err)),
                     }
-                }?
+                };
+                match res {
+                    Ok(c) => c,
+                    Err(_) => {
+                        panic!("Failed to get parallel ctx from engine api");
+                    }
+                }
             };
     
             if parallel_ctx.persisting_kind.can_run_parallel_state_root() {
                 tracing::debug!("run sparse state root calculation");
                 // TODO: check has_ancestors_with_missing_trie_updates
-                let state_provider = CachedStateProvider::new_with_caches(
-                    state_provider,
-                    payload_handle.caches(),
-                    payload_handle.cache_metrics(),
+                let ctx = self.context_for_next_block(parent, attributes.clone());
+                let evm_env = self.next_evm_env(parent, &attributes)?;
+                // spawn the payload processor against engine tree
+                let empty_iter = std::iter::empty::<reth_primitives_traits::Recovered<reth_primitives_traits::TxTy<BscPrimitives>>>()
+                    .map(Ok::<_, reth_evm::block::BlockExecutionError>);
+                let payload_handle = payload_processor.spawn(
+                    ExecutionEnv {
+                        evm_env: evm_env.clone(),
+                        hash: parent.hash(),
+                        parent_hash: parent.hash(),
+                    },
+                    empty_iter,
+                    parallel_ctx.state_provider_builder.expect("missing state_provider_builder"),
+                    parallel_ctx.consistent_view,
+                    parallel_ctx.trie_input,
+                    &TreeConfig::default(), // TODO: use the real config
                 );
-                let mut db = State::builder()
-                .with_database(StateProviderDatabase::new(&state_provider))
-                .with_bundle_update()
-                .without_state_clear()
-                .build();
+                // TODO: fix later, use the state provider from parallel ctx
+                // add caches
+                // let state_provider = CachedStateProvider::new_with_caches(
+                //     state_provider,
+                //     payload_handle.caches(),
+                //     payload_handle.cache_metrics(),
+                // );
+                // let state_provider = parallel_ctx.state_provider_builder.expect("missing state_provider_builder").build()?;
+                // let mut db = State::builder()
+                //     .with_database(StateProviderDatabase::new(&state_provider))
+                //     .with_bundle_update()
+                //     .without_state_clear()
+                //     .build();
     
-                let evm = self.evm_with_env(&mut db, evm_env.clone());
-                let ctx = self.context_for_next_block(parent, attributes);
-                let mut executor = BscBlockExecutor::new(
-                    evm,
+                // let evm = self.evm_with_env(&mut db, evm_env.clone());
+                // build standard builder, then inject state hook
+                let evm_std = self.evm_with_env(db, evm_env.clone());
+                let mut bsc_executor = BscBlockExecutor::new(
+                    evm_std,
                     ctx.clone(),
                     shared_ctx.clone(),
                     self.executor_factory.spec().clone(),
                     *self.executor_factory.receipt_builder(),
                     SystemContract::new(self.executor_factory.spec().clone()),
                 );
-                executor.with_state_hook(Box::new(payload_handle.state_hook()));
-
-                // spawn the payload processor
-                let payload_handle = payload_processor.spawn(
-                    ctx.clone(),
-                    vec![],
-                    parallel_ctx.state_provider_builder,
-                    parallel_ctx.consistent_view,
-                    parallel_ctx.trie_input,
-                    TreeConfig::default(), // TODO: use the real config
-                )
-    
                 // TODO: implement the state root computation later
                 // after executing the block we can stop executing transactions
                 // payload_handle.stop_prewarming_execution();
@@ -225,19 +259,40 @@ impl BscEvmConfig {
                 //         debug!(target: "engine::tree", %error, "Background parallel state root computation failed");
                 //     }
                 // }
-                return Ok(BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
-                    executor,
+
+                bsc_executor.set_state_hook(Some(Box::new(payload_handle.state_hook())));
+                let builder = BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
+                    bsc_executor,
                     ctx,
                     shared_ctx,
                     &self.block_assembler,
                     parent,
-                    payload_processor: Some(payload_processor),
-                    payload_handle: Some(payload_handle),
-                ));
+                );
+                builder.payload_processor = Some(payload_processor);
+                builder.payload_handle = Some(payload_handle);
+                return Ok(builder);
             }
         }
-        
-        return self.builder_for_next_block(db, parent, attributes);
+        // fallback: standard builder path (inline to keep same concrete type)
+        let ctx = self.context_for_next_block(parent, attributes);
+        let evm = self.evm_with_env(db, evm_env);
+        let shared_ctx = BscExecutionSharedCtx::default();
+        let bsc_executor = BscBlockExecutor::new(
+            evm,
+            ctx.clone(),
+            shared_ctx.clone(),
+            self.executor_factory.spec().clone(),
+            *self.executor_factory.receipt_builder(),
+            SystemContract::new(self.executor_factory.spec().clone()),
+        );
+        let builder = BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
+            bsc_executor,
+            ctx,
+            shared_ctx,
+            &self.block_assembler,
+            parent,
+        );
+        Ok(builder)
     }
 }
 
@@ -517,7 +572,6 @@ where
             shared_ctx,
             &self.block_assembler,
             parent,
-            None,
         )
     }
 }

@@ -123,11 +123,10 @@ pub struct BscPayloadBuilder<Pool, Client, EvmConfig = BscEvmConfig> {
     ctx: MiningContext,
 }
 
-impl<Pool, Client, EvmConfig> BscPayloadBuilder<Pool, Client, EvmConfig> 
+impl<Pool, Client> BscPayloadBuilder<Pool, Client, BscEvmConfig> 
 where
     Client: StateProviderFactory + 'static,
-    EvmConfig: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes> + 'static,
-    <EvmConfig as ConfigureEvm>::Primitives: reth_primitives_traits::NodePrimitives<
+    <BscEvmConfig as ConfigureEvm>::Primitives: reth_primitives_traits::NodePrimitives<
         BlockHeader = alloy_consensus::Header,
         SignedTx = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>,
         Block = crate::node::primitives::BscBlock,
@@ -138,7 +137,7 @@ where
     pub const fn new(
         client: Client,
         pool: Pool,
-        evm_config: EvmConfig,
+        evm_config: BscEvmConfig,
         builder_config: EthereumBuilderConfig,
         chain_spec: Arc<BscChainSpec>,
         parlia: Arc<Parlia<BscChainSpec>>,
@@ -202,7 +201,7 @@ where
         let system_txs_gas = self.parlia.estimate_gas_reserved_for_system_txs(Some(parent_header.timestamp), parent_header.number+1, attributes.timestamp);
         let block_gas_limit: u64 = builder.evm_mut().block().gas_limit.saturating_sub(system_txs_gas);
 
-        let base_fee = builder.evm_mut().block().basefee;
+        let base_fee: u64 = builder.evm_mut().block().basefee;
         
         let mut sidecars_map = HashMap::new();
         let mut block_blob_count = 0;
@@ -470,7 +469,8 @@ where
         // add system txs to payload.
         let finalize_start = std::time::Instant::now();
         let BlockBuilderOutcome { execution_result, hashed_state, trie_updates, block } = builder.finish(&state_provider)?;
-        let mut sealed_block = Arc::new(block.sealed_block().clone());
+        let mut sealed_block: Arc<reth_primitives::SealedBlock<reth_primitives::BlockTy<<BscEvmConfig as ConfigureEvm>::Primitives>>> =
+            Arc::new(block.sealed_block().clone());
         
         // Update miner metrics
         use once_cell::sync::Lazy;
@@ -696,18 +696,17 @@ where
     trace_id: u64,
 }
 
-impl<Pool, Client, EvmConfig> BscPayloadJob<Pool, Client, EvmConfig>
+impl<Pool, Client> BscPayloadJob<Pool, Client, BscEvmConfig>
 where
     Client: StateProviderFactory + reth_provider::HeaderProvider<Header = alloy_consensus::Header> + reth_provider::BlockHashReader + Clone + 'static,
-    EvmConfig: ConfigureEvm<NextBlockEnvCtx = NextBlockEnvAttributes> + 'static,
-    <EvmConfig as ConfigureEvm>::Primitives: reth_primitives_traits::NodePrimitives<BlockHeader = alloy_consensus::Header, SignedTx = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>, Block = crate::node::primitives::BscBlock, Receipt = reth_ethereum_primitives::Receipt>,
+    <BscEvmConfig as ConfigureEvm>::Primitives: reth_primitives_traits::NodePrimitives<BlockHeader = alloy_consensus::Header, SignedTx = alloy_consensus::EthereumTxEnvelope<alloy_consensus::TxEip4844>, Block = crate::node::primitives::BscBlock, Receipt = reth_ethereum_primitives::Receipt>,
     Pool: TransactionPool<Transaction: PoolTransaction<Consensus = TransactionSigned>> + 'static,
 {
     /// Creates a new BscPayloadJob and returns both the job and its handle
     pub fn new(
         parlia: Arc<crate::consensus::parlia::Parlia<crate::chainspec::BscChainSpec>>,
         mining_ctx: MiningContext,
-        builder: BscPayloadBuilder<Pool, Client, EvmConfig>,
+        builder: BscPayloadBuilder<Pool, Client, BscEvmConfig>,
         build_args: BscBuildArguments<EthPayloadBuilderAttributes>,
         simulator: Arc<BidSimulator<Client, Pool>>,  // No outer RwLock needed
         result_tx: mpsc::UnboundedSender<SubmitContext>,
