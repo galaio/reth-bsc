@@ -261,7 +261,7 @@ impl BscEvmConfig {
                 // }
 
                 bsc_executor.set_state_hook(Some(Box::new(payload_handle.state_hook())));
-                let builder = BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
+                let mut builder = BscBlockBuilder::<_, _, _, BscEvmConfig>::new(
                     bsc_executor,
                     ctx,
                     shared_ctx,

@@ -3,7 +3,9 @@ use alloy_primitives::BlockHash;
 use reth_engine_primitives::{BSCEngineMessageError};
 use reth_engine_tree::{engine::EngineApiRequest, tree::PayloadProcessor};
 use reth_engine_tree::tree::{CustomRequestMessage, PayloadHandle, CustomParallelCtx};
-use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx}};
+use reth_evm::{ConfigureEvm, execute::{BlockBuilder, BlockBuilderOutcome, BlockExecutionError, ExecutorTx, WithTxEnv}};
+use crate::evm::transaction::BscTxEnv;
+use alloy_consensus::{EthereumTxEnvelope, TxEip4844};
 use alloy_evm::eth::receipt_builder::ReceiptBuilder;
 use reth_node_builder::rpc::EngineApiTx;
 use reth::builder::NodeAdapter;
@@ -41,7 +43,15 @@ where
     /// Payload processor for state root computation.
     pub payload_processor: Option<PayloadProcessor<CEvm>>,
     /// Payload handle for state root computation.
-    pub payload_handle: Option<PayloadHandle<<BscPrimitives as NodePrimitives>::SignedTx, BSCEngineMessageError>>,
+    pub payload_handle: Option<
+        PayloadHandle<
+            WithTxEnv<
+                BscTxEnv,
+                Recovered<EthereumTxEnvelope<TxEip4844>>
+            >,
+            BlockExecutionError
+        >
+    >,
 }
 
 impl<'a, EVM, Spec, R, CEvm> BscBlockBuilder<'a, EVM, Spec, R, CEvm>
