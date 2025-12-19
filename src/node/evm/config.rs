@@ -148,11 +148,11 @@ impl BscEvmConfig {
         match STATE_ROOT_ALGORITHM {
             "sparse" => {
                 let engine_api_tx = crate::shared::get_engine_api_tx().unwrap_or_else(|| panic!("engine api not found"));
-                tracing::debug!("use sparse trie state root calculation");
+                tracing::debug!("try to use sparse trie state root calculation, number: {}", parent.number+1);
                 // just init a default custom ctx for mining block.
                 let shared_ctx = BscExecutionSharedCtx::default();
                 let mut payload_processor = {
-                    tracing::debug!("request parallel payload processor");
+                    tracing::debug!("try to request parallel payload processor, number: {}", parent.number+1);
                     let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                         let fut = async { request_payload_processor(&engine_api_tx).await };
                         tokio::task::block_in_place(|| handle.block_on(fut))
@@ -172,7 +172,7 @@ impl BscEvmConfig {
                 };
         
                 let parallel_ctx = {
-                    tracing::debug!("request parallel ctx");
+                    tracing::debug!("try to request parallel ctx, number: {}", parent.number+1);
                     let res = if let Ok(handle) = tokio::runtime::Handle::try_current() {
                         let fut = async {
                             request_parallel_ctx(&engine_api_tx, parent.hash(), payload_processor.take_trie_input()).await
@@ -196,7 +196,7 @@ impl BscEvmConfig {
                 };
         
                 if parallel_ctx.persisting_kind.can_run_parallel_state_root() {
-                    tracing::debug!("run sparse state root calculation");
+                    tracing::debug!("decided to run sparse state root calculation, can_run_parallel_state_root, number: {}", parent.number+1);
                     // TODO: check has_ancestors_with_missing_trie_updates
                     let ctx = self.context_for_next_block(parent, attributes.clone());
                     let evm_env = self.next_evm_env(parent, &attributes)?;
@@ -251,6 +251,7 @@ impl BscEvmConfig {
                     );
                     builder.payload_processor = Some(payload_processor);
                     builder.payload_handle = Some(payload_handle);
+                    tracing::debug!("succeed to create sparse builder, number: {}", parent.number+1);
                     return Ok(builder);
                 }
             }
@@ -258,6 +259,7 @@ impl BscEvmConfig {
         }
         
         // fallback: standard builder path (inline to keep same concrete type)
+        tracing::debug!("falling back to standard builder by state root algorithm, number: {}", parent.number+1);
         let ctx = self.context_for_next_block(parent, attributes);
         let evm = self.evm_with_env(db, evm_env);
         let shared_ctx = BscExecutionSharedCtx::default();
@@ -540,6 +542,7 @@ where
         DB: Database,
         I: InspectorFor<Self, &'a mut State<DB>> + 'a,
     {
+        tracing::debug!("falling back to standard builder, number: {}", parent.number+1);
         // just init a default custom ctx for mining block.
         let shared_ctx = BscExecutionSharedCtx::default();
         let bsc_executor = BscBlockExecutor::new(

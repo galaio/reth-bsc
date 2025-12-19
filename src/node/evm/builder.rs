@@ -144,28 +144,33 @@ where
         
         let (state_root, trie_updates) = match STATE_ROOT_ALGORITHM {
             "sparse" => {
-                tracing::debug!("use sparse state root calculation");
-                let payload_handle = self.payload_handle.as_mut().unwrap();
-                // TODO: uncomment this when we have a way to stop the prewarming execution.
-                // payload_handle.stop_prewarming_execution();
-
-                // TODO: submit the final state to the state hook again.
-                // let mut state_hook = payload_handle.state_hook();
-                // let source_index = result.receipts.len();
-                // // Note: OnStateHook 期望的是 EvmState(HashMap<Address, Account>)，此处仅做空回补以满足接口
-                // let empty_evm_state: std::collections::HashMap<alloy_primitives::Address, revm::revm_state::Account> = Default::default();
-                // state_hook.on_state(StateChangeSource::Transaction(source_index), &empty_evm_state);
-                match payload_handle.state_root() {
-                    Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
-                        (state_root, trie_updates)
+                tracing::debug!("use sparse state root calculation, number: {}, handle: {:?}", self.parent.number+1, self.payload_handle.is_some());
+                if let Some(payload_handle) = self.payload_handle.as_mut() {
+                    // TODO: uncomment this when we have a way to stop the prewarming execution.
+                    // payload_handle.stop_prewarming_execution();
+    
+                    // TODO: submit the final state to the state hook again.
+                    // let mut state_hook = payload_handle.state_hook();
+                    // let source_index = result.receipts.len();
+                    // let empty_evm_state: std::collections::HashMap<alloy_primitives::Address, revm::revm_state::Account> = Default::default();
+                    // state_hook.on_state(StateChangeSource::Transaction(source_index), &empty_evm_state);
+                    match payload_handle.state_root() {
+                        Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
+                            (state_root, trie_updates)
+                        }
+                        Err(error) => {
+                            return Err(BlockExecutionError::other(error));
+                        }
                     }
-                    Err(error) => {
-                        return Err(BlockExecutionError::other(error));
-                    }
+                } else {
+                    tracing::warn!("sparse state root requested but payload_handle is None; falling back to serial calculation, number: {}", self.parent.number+1);
+                    state
+                        .state_root_with_updates(hashed_state.clone())
+                        .map_err(BlockExecutionError::other)?
                 }
             }
             "parallel" => {
-                tracing::debug!("use parallel state root calculation");
+                tracing::debug!("use parallel state root calculation, number: {}", self.parent.number+1);
                 let engine_api_tx = match crate::shared::get_engine_api_tx() {
                     Some(tx) => tx,
                     None => {
@@ -198,7 +203,7 @@ where
                     .map_err(BlockExecutionError::other)?
             }
             _ => {
-                tracing::debug!("use serial state root calculation");
+                tracing::debug!("use serial state root calculation, number: {}", self.parent.number+1);
                 state
                     .state_root_with_updates(hashed_state.clone())
                     .map_err(BlockExecutionError::other)?
