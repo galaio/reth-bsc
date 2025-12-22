@@ -15,8 +15,6 @@ use reth_trie_parallel::root::ParallelStateRoot;
 use reth_trie_common::TrieInput;
 use revm::database::{State, states::bundle_state::BundleRetention};
 use alloy_evm::{Evm, block::BlockExecutor};
-use alloy_evm::block::StateChangeSource;
-use reth_evm::OnStateHook;
 use reth_chainspec::{EthChainSpec, EthereumHardforks, Hardforks};
 use tokio::sync::oneshot;
 use crate::node::BscNode;
@@ -154,6 +152,7 @@ where
                     // let source_index = result.receipts.len();
                     // let empty_evm_state: std::collections::HashMap<alloy_primitives::Address, revm::revm_state::Account> = Default::default();
                     // state_hook.on_state(StateChangeSource::Transaction(source_index), &empty_evm_state);
+                    tracing::debug!("sparse state root calculation done, number: {}", self.parent.number+1);
                     match payload_handle.state_root() {
                         Ok(StateRootComputeOutcome { state_root, trie_updates }) => {
                             (state_root, trie_updates)
