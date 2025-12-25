@@ -46,6 +46,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Delay left over for mining calculation
 pub const DELAY_LEFT_OVER: u64 = 50;
+pub const MINING_TIME_OUT: u64 = 1000;
 
 /// Time multiplier for retry condition check
 const TIME_MULTIPLIER: u32 = 2;
@@ -716,11 +717,12 @@ where
         let (tx_listener_tx, tx_listener_rx) = mpsc::unbounded_channel();
         
         let trace_id = build_args.trace_id;
-        
-        let mining_delay = parlia.clone().delay_for_mining(
-            &mining_ctx.parent_snapshot, 
-            mining_ctx.header.as_ref().unwrap(), 
-            DELAY_LEFT_OVER);
+
+        let _mining_delay = parlia.clone().delay_for_mining(
+            &mining_ctx.parent_snapshot,
+            mining_ctx.header.as_ref().unwrap(),
+            DELAY_LEFT_OVER,
+        );
 
         // Spawn a background task to listen for new transactions from pool
         // When tx_listener_rx is dropped (job ends), tx_listener_tx.send() will fail,
@@ -740,7 +742,9 @@ where
             parlia,
             mining_ctx,
             builder: Arc::new(builder),
-            timeout: std::time::Duration::from_millis(mining_delay),
+            // timeout: std::time::Duration::from_millis(mining_delay),
+            // TODO: just set a large timeout for now, need to optimize later.
+            timeout: std::time::Duration::from_millis(MINING_TIME_OUT),
             try_build_rx,
             try_build_tx: try_build_tx.clone(),
             tx_listener: tx_listener_rx,
